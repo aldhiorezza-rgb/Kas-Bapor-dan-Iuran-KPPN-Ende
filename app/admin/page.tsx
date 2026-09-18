@@ -167,12 +167,12 @@ export default function AdminPage() {
 
           {/* Box Rumdin */}
           <div className="bg-white p-5 rounded-xl border border-slate-200">
-            <h3 className="font-semibold text-slate-800">Transfer Rumdin ke PPNPN</h3>
+            <h3 className="font-semibold text-slate-800">Transfer Rumdin</h3>
             <p className="text-sm text-slate-500 mt-1">Total terkumpul: Rp {totalRumdin.toLocaleString('id-ID')}</p>
             <div className="mt-4">
               <label className="cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg inline-flex items-center gap-2">
                 <Upload size={16} />
-                Upload Bukti Transfer PPNPN
+                Upload Bukti Transfer 
                 <input
                   type="file"
                   className="hidden"
