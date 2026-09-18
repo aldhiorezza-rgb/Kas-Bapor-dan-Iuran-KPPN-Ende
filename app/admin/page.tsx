@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Upload, ArrowLeft, Trash2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Upload, ArrowLeft, Trash2, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 
 export default function AdminPage() {
@@ -43,7 +43,7 @@ export default function AdminPage() {
     }
     setEmployees(emps || []);
 
-    // 2. Ambil potongan di periode terpilih
+    // 2. Ambil potongan bulanan di periode terpilih
     const { data: deds, error: dedErr } = await supabase
       .from('monthly_deductions')
       .select('*')
@@ -53,7 +53,7 @@ export default function AdminPage() {
       console.error('Error fetching deductions:', dedErr);
     }
 
-    // Jika pegawai ada tapi baris potongan bulan ini belum dibuat, buatkan otomatis
+    // Jika pegawai ada tapi baris potongan bulan ini belum ter-generate, buatkan otomatis
     if (emps && emps.length > 0 && (!deds || deds.length === 0)) {
       const initData = emps.map((e) => ({
         period,
@@ -137,6 +137,42 @@ export default function AdminPage() {
     }
   };
 
+  // Hapus bukti transfer jika salah upload
+  const handleDeleteProof = async (category: 'DASOS' | 'RUMDIN', proofUrl: string) => {
+    if (
+      !confirm(
+        `Yakin ingin menghapus bukti ${category}? Status akan kembali menjadi belum dikirim dan tombol upload akan aktif kembali.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      // 1. Ambil nama berkas dari URL untuk dihapus dari Storage
+      const urlParts = proofUrl.split('/');
+      const fileName = urlParts[urlParts.length - 1];
+      if (fileName) {
+        await supabase.storage.from('bukti-transaksi').remove([fileName]);
+      }
+
+      // 2. Hapus baris dari tabel database
+      const { error } = await supabase
+        .from('monthly_submissions')
+        .delete()
+        .eq('period', period)
+        .eq('category', category);
+
+      if (error) {
+        alert('Gagal menghapus data: ' + error.message);
+      } else {
+        alert(`Bukti transfer ${category} berhasil dihapus!`);
+        loadData();
+      }
+    } catch (err: any) {
+      alert('Terjadi kesalahan: ' + err.message);
+    }
+  };
+
   // Catat Mutasi Kas Bapor
   const handleAddBapor = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -183,7 +219,6 @@ export default function AdminPage() {
     if (error) {
       alert('Gagal menambah pegawai: ' + error.message);
     } else {
-      // Masukkan langsung baris tagihan potongan bulan berjalan
       if (newEmp) {
         await supabase.from('monthly_deductions').insert({
           period,
@@ -200,7 +235,7 @@ export default function AdminPage() {
     }
   };
 
-  // Hapus / Nonaktifkan Pegawai
+  // Hapus Pegawai
   const handleDeleteEmployee = async (empId: string, empName: string) => {
     if (!confirm(`Hapus pegawai "${empName}" dari daftar master?`)) return;
 
@@ -212,7 +247,6 @@ export default function AdminPage() {
     if (error) {
       alert('Gagal menghapus pegawai: ' + error.message);
     } else {
-      // Hapus tagihan bulanan pegawai tersebut untuk periode aktif
       await supabase
         .from('monthly_deductions')
         .delete()
@@ -262,9 +296,9 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Panel Aksi Penyetoran DASOS & RUMDIN */}
+        {/* Panel Penyetoran DASOS & RUMDIN */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Card Eksekusi DASOS */}
+          {/* Card DASOS */}
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
             <div>
               <div className="flex justify-between items-start">
@@ -289,14 +323,22 @@ export default function AdminPage() {
               {dasosSub ? (
                 <div className="text-xs text-slate-600 flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200">
                   <span>Bukti setor telah diunggah.</span>
-                  <a
-                    href={dasosSub.proof_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-blue-600 font-semibold hover:underline"
-                  >
-                    Buka Berkas
-                  </a>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={dasosSub.proof_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-600 font-semibold hover:underline px-2 py-1"
+                    >
+                      Buka Berkas
+                    </a>
+                    <button
+                      onClick={() => handleDeleteProof('DASOS', dasosSub.proof_url)}
+                      className="text-rose-600 hover:text-rose-800 font-semibold text-xs border border-rose-200 bg-rose-50 hover:bg-rose-100 px-2.5 py-1 rounded transition"
+                    >
+                      Hapus / Ganti
+                    </button>
+                  </div>
                 </div>
               ) : allPaid ? (
                 <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg inline-flex items-center justify-center gap-2 w-full transition shadow-sm">
@@ -323,7 +365,7 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Card Eksekusi RUMDIN */}
+          {/* Card RUMDIN */}
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
             <div>
               <div className="flex justify-between items-start">
@@ -348,14 +390,22 @@ export default function AdminPage() {
               {rumdinSub ? (
                 <div className="text-xs text-slate-600 flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200">
                   <span>Bukti transfer telah diunggah.</span>
-                  <a
-                    href={rumdinSub.proof_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-blue-600 font-semibold hover:underline"
-                  >
-                    Buka Berkas
-                  </a>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={rumdinSub.proof_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-600 font-semibold hover:underline px-2 py-1"
+                    >
+                      Buka Berkas
+                    </a>
+                    <button
+                      onClick={() => handleDeleteProof('RUMDIN', rumdinSub.proof_url)}
+                      className="text-rose-600 hover:text-rose-800 font-semibold text-xs border border-rose-200 bg-rose-50 hover:bg-rose-100 px-2.5 py-1 rounded transition"
+                    >
+                      Hapus / Ganti
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <label className="cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg inline-flex items-center justify-center gap-2 w-full transition shadow-sm">
